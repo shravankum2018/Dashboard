@@ -291,7 +291,7 @@ for i, ticker in enumerate(tickers):
 
     cell = cols[(i * 2) % NUM_COLS].container(border=True)
     cell.write("")
-    cell.altair_chart(chart, width='stretch')  # Replaced use_container_width=True
+    cell.altair_chart(chart, use_container_width=True)
 
     # Create Delta chart
     plot_data = pd.DataFrame(
@@ -313,7 +313,7 @@ for i, ticker in enumerate(tickers):
 
     cell = cols[(i * 2 + 1) % NUM_COLS].container(border=True)
     cell.write("")
-    cell.altair_chart(chart, width='stretch')  # Replaced use_container_width=True
+    cell.altair_chart(chart, use_container_width=True)
 
 ""
 ""
@@ -553,7 +553,7 @@ try:
 
     with col2:
         df.sort_values("VALUE", ascending=False, inplace=True)
-        st.dataframe(df.reset_index(drop=True).drop(columns=["Color"]), width="stretch")
+        st.dataframe(df.reset_index(drop=True).drop(columns=["Color"]))
 
     # with sep2:
     #     st.markdown(
@@ -563,11 +563,11 @@ try:
 
     with col3:
         with st.container(border=True):
-            st.altair_chart(adv_dec_chart, width="stretch")
+            st.altair_chart(adv_dec_chart, use_container_width=True)
 
     with col4:
         with st.container(border=True):
-            st.altair_chart(turnover_chart, width="stretch")
+            st.altair_chart(turnover_chart, use_container_width=True)
 except Exception as e:
     st.error(f"Error loading pre-open data: {e}")
 
@@ -700,7 +700,7 @@ try:
     col1, sep1, col2, sep2, col3 = st.columns([12, 0.2, 4, 0.2, 2])
 
     with col1:
-        st.altair_chart(bubble_chart, width="stretch")
+        st.altair_chart(bubble_chart, use_container_width=True)
 
     with sep1:
         st.markdown(
@@ -710,7 +710,7 @@ try:
 
     with col2:
         df_display = df.sort_values("VALUE", ascending=False).reset_index(drop=True).drop(columns=["Color"])
-        st.dataframe(df_display, width="stretch")
+        st.dataframe(df_display)
 
     with sep2:
         st.markdown(
@@ -719,7 +719,7 @@ try:
         )
 
     with col3:
-        st.altair_chart(adv_dec_chart, width="stretch")
+        st.altair_chart(adv_dec_chart, use_container_width=True)
 
 
 except Exception as e:
