@@ -330,10 +330,11 @@ def get_live_nse_data(index):
         df_decline = df[df['%CHNG'] < 0] # Filter for declining stocks
         advance_turnover = df_advance['VALUE'].sum()
         decline_turnover = df_decline['VALUE'].sum()
-        percent_advance_turnover = (advance_turnover / decline_turnover)*100
+        percent_advance_turnover = int(advance_turnover / decline_turnover * 100) if decline_turnover != 0 else 0
+        percent_decline_turnover = int(100 - percent_advance_turnover)
         df_advance =(len(df[df['%CHNG'] > 0])) # Filter for advancing stocks
         df_decline = int(len(df[df['%CHNG'] < 0])) # Filter for declining stocks
-        return df,df_advance,df_decline,percent_advance_turnover
+        return df,df_advance,df_decline,percent_advance_turnover,percent_decline_turnover
 
     except Exception as e:
         print(f"Error fetching live NSE data: {str(e)}")
@@ -341,5 +342,3 @@ def get_live_nse_data(index):
         return pd.DataFrame()
 
 
-
-get_pre_open_data()

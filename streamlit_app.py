@@ -323,7 +323,12 @@ for i, ticker in enumerate(tickers):
 # ================================
 # 🆕 Pre-open Bubble Chart with Table in Columns
 # ================================
-st.subheader("⚡ Pre-open Market Movers (Bubble Chart)")
+
+"""
+## ⚡ Pre-open Market Movers 
+
+
+"""
 
 try:
     pre_open = get_pre_open_data()
@@ -551,9 +556,7 @@ try:
     #         unsafe_allow_html=True,
     #     )
 
-    with col2:
-        df.sort_values("VALUE", ascending=False, inplace=True)
-        st.dataframe(df.reset_index(drop=True).drop(columns=["Color"]))
+
 
     # with sep2:
     #     st.markdown(
@@ -561,13 +564,16 @@ try:
     #         unsafe_allow_html=True,
     #     )
 
-    with col3:
+    with col2:
         with st.container(border=True):
             st.altair_chart(adv_dec_chart, use_container_width=True)
 
-    with col4:
+    with col3:
         with st.container(border=True):
             st.altair_chart(turnover_chart, use_container_width=True)
+    with col4:
+        df.sort_values("VALUE", ascending=False, inplace=True)
+        st.dataframe(df.reset_index(drop=True).drop(columns=["Color"]))
 except Exception as e:
     st.error(f"Error loading pre-open data: {e}")
 
@@ -580,9 +586,13 @@ except Exception as e:
 # ================================
 # Live Market Data Visualization
 # ================================
-st.subheader("Live Market Data")
 
 
+"""
+## ⚡ Live Market Data
+
+
+"""
 # Index selector (single select, like stock ticker but for one index)
 
 if "selected_index" not in st.session_state:
@@ -602,8 +612,8 @@ try:
     from zerodha_data import get_live_nse_data
     result = get_live_nse_data(selected_index)
 
-    if isinstance(result, tuple) and len(result) == 4:
-        df, df_advance, df_decline, percent_advance_turnover = result
+    if isinstance(result, tuple) and len(result) == 5:
+        df, df_advance, df_decline, percent_advance_turnover_live, percent_decline_turnover_live = result
     else:
         st.error("Unexpected data format from get_live_nse_data")
         st.stop()
@@ -693,33 +703,78 @@ try:
         title="Advance vs Decline",
     )
 
-    # Display percent_advance_turnover as a metric
-    st.metric("Advance Turnover %", f"{percent_advance_turnover:.2f}%")
+    # # Display percent_advance_turnover as a metric
+    # st.metric("Advance Turnover %", f"{percent_advance_turnover:.2f}%")
+
+    turnover_df = pd.DataFrame({
+            "Status": ["Advance", "Decline"],
+            "Turnover": [percent_advance_turnover_live, percent_decline_turnover_live],
+        })
+
+    turnover_bar = (
+        alt.Chart(turnover_df)
+        .mark_bar()
+        .encode(
+            x=alt.X("Status:N", title="Turnover Direction"),
+            y=alt.Y("Turnover:Q", title=""),
+            color=alt.Color(
+                "Status:N",
+                scale=alt.Scale(domain=["Advance", "Decline"], range=["green", "red"]),
+                legend=None,
+            ),
+            tooltip=["Status", "Turnover"],
+        )
+        .properties(
+            height=280,
+            width="container",
+            title="Turnover Adv Vs Dec",
+        )
+    )
+
+    turnover_text = (
+        alt.Chart(turnover_df)
+        .mark_text(dy=-8, color="white", size=14, fontWeight="bold")
+        .encode(
+            x=alt.X("Status:N"),
+            y=alt.Y("Turnover:Q"),
+            text=alt.Text("Turnover:Q"),
+        )
+    )
+
+    turnover_chart_live = (turnover_bar + turnover_text)
+
 
     # Layout: 5 columns (chart | sep | table | sep | adv/decline)
-    col1, sep1, col2, sep2, col3 = st.columns([12, 0.2, 4, 0.2, 2])
+    col1,col2, col3, col4 = st.columns( [10, 3,3, 3])
 
     with col1:
-        st.altair_chart(bubble_chart, use_container_width=True)
+         with st.container(border=True):
+            st.altair_chart(bubble_chart, use_container_width=True)
 
-    with sep1:
-        st.markdown(
-            "<div style='width:1px; background:#CCC; height:100%; margin:0 auto;'></div>",
-            unsafe_allow_html=True,
-        )
+    # with sep1:
+    #     st.markdown(
+    #         "<div style='width:1px; background:#CCC; height:100%; margin:0 auto;'></div>",
+    #         unsafe_allow_html=True,
+    #     )
+
+
+    # with sep2:
+    #     st.markdown(
+    #         "<div style='width:1px; background:#CCC; height:100%; margin:0 auto;'></div>",
+    #         unsafe_allow_html=True,
+    #     )
 
     with col2:
-        df_display = df.sort_values("VALUE", ascending=False).reset_index(drop=True).drop(columns=["Color"])
-        st.dataframe(df_display)
-
-    with sep2:
-        st.markdown(
-            "<div style='width:1px; background:#CCC; height:100%; margin:0 auto;'></div>",
-            unsafe_allow_html=True,
-        )
+            with st.container(border=True):
+                st.altair_chart(adv_dec_chart, use_container_width=True)
 
     with col3:
-        st.altair_chart(adv_dec_chart, use_container_width=True)
+        with st.container(border=True):
+            st.altair_chart(turnover_chart_live, use_container_width=True)
+
+    with col4:
+        df_display = df.sort_values("VALUE", ascending=False).reset_index(drop=True).drop(columns=["Color"])
+        st.dataframe(df_display)
 
 
 except Exception as e:
