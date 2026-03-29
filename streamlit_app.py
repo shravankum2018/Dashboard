@@ -337,82 +337,119 @@ try:
     decline_count = pre_open[2]
     per_advance_turnover = pre_open[3]
     per_decline_turnover = pre_open[4]
-    df = df1[["SYMBOL", "%CHNG", "VALUE"]].head(10).copy()
+    df = df1[["SYMBOL", "%CHNG", "VALUE"]].copy()
+    df10 = df.head(10)
 
-    # Build bucket ranges
-    # bins = [-999, -10, -5, -3, -1, 0, 1, 3, 5, 10, 999]
-    # labels = [
-    #     "< -10%",
-    #     "-10% to -5%",
-    #     "-5% to -3%",
-    #     "-3% to -1%",
-    #     "-1% to 0%",
-    #     "0% to 1%",
-    #     "1% to 3%",
-    #     "3% to 5%",
-    #     "5% to 10%",
-    #     "> 10%",
-    # ]
-    # df_full = df.copy()  # Use full df for bucketing
-    # df = df.head(10)  # Keep df as head(10) for display
-    # df_full["range"] = pd.cut(df_full["%CHNG"], bins=bins, labels=labels, include_lowest=True)
+    # Build bucket ranges for the full pre-open dataset
+    bins = [-20, -10, -5, -3, -1, 0, 1, 3, 5, 10, 20]
+    labels = [
+        "-20% to -10%",
+        "-10% to -5%",
+        "-5% to -3%",
+        "-3% to -1%",
+        "-1% to 0%",
+        "0% to 1%",
+        "1% to 3%",
+        "3% to 5%",
+        "5% to 10%",
+        "10% to 20%",
+    ]
+    df_full = df.copy()  # Use full df for bucketing
+    df_full["range"] = pd.cut(df_full["%CHNG"], bins=bins, labels=labels, include_lowest=True)
 
-    # bucket_counts = df_full.groupby("range").size().reset_index(name="count")
+    bucket_counts = (
+        df_full.groupby("range")
+        .agg(count=("range", "size"), total_value=("VALUE", "sum"))
+        .reset_index()
+    )
 
-    # # Keep sorted order
-    # bucket_counts["range"] = pd.Categorical(bucket_counts["range"], categories=labels, ordered=True)
-    # bucket_counts = bucket_counts.sort_values("range")
+    # Keep sorted order
+    bucket_counts["range"] = pd.Categorical(bucket_counts["range"], categories=labels, ordered=True)
+    bucket_counts = bucket_counts.sort_values("range")
+    bucket_counts["total_value_label"] = bucket_counts["total_value"].map(lambda x: f"{x:,.0f} cr")
 
-    # range_chart = (
-    #     alt.Chart(bucket_counts)
-    #     .mark_bar()
-    #     .encode(
-    #         x=alt.X("range:N", title="% Change bucket"),
-    #         y=alt.Y("count:Q", title="Number of stocks"),
-    #         color=alt.condition(
-    #             alt.FieldOneOfPredicate(field="range", oneOf=["0% to 1%", "1% to 3%", "3% to 5%", "5% to 10%", "> 10%"]),  # Fixed: use FieldOneOfPredicate for 'isin' equivalent
-    #             alt.value("green"),
-    #             alt.value("red"),
-    #         ),
-    #         tooltip=["range", "count"],
-    #     )
-    #     .properties(
-    #         title="Pre-open Stock Count by % Change Bucket",
-    #         height=320,
-    #         width="container",
-    #     )
-    # )
+    range_chart = (
+        alt.Chart(bucket_counts)
+        .mark_bar(cornerRadius=8)
+        .encode(
+            y=alt.Y(
+                "range:N",
+                sort=labels,
+                title="% Change bucket",
+                axis=alt.Axis(labelFontSize=13, titleFontSize=15),
+            ),
+            x=alt.X(
+                "count:Q",
+                title="Number of stocks",
+                axis=alt.Axis(labelFontSize=13, titleFontSize=15),
+            ),
+            color=alt.condition(
+                alt.FieldOneOfPredicate(field="range", oneOf=["0% to 1%", "1% to 3%", "3% to 5%", "5% to 10%", "10% to 20%"]),
+                alt.value("#2ca02c"),
+                alt.value("#d62728"),
+            ),
+            tooltip=["range", "count", "total_value_label"],
+        )
+        .properties(
+            title="Pre-open Stock Count by % Change Bucket",
+            height=360,
+            width="container",
+        )
+    )
 
-    # # If you want text labels, add:
-    # text = (
-    #     alt.Chart(bucket_counts)
-    #     .mark_text(dy=-10, color="white", fontWeight="bold")
-    #     .encode(
-    #         x="range:N",
-    #         y="count:Q",
-    #         text="count:Q",
-    #     )
-    # )
-    # range_chart = (range_chart + text)
-    # range_chart = (
-    #     alt.Chart(bucket_counts)
-    #     .mark_bar()
-    #     .encode(
-    #         x=alt.X("range:N", title="% Change bucket"),
-    #         y=alt.Y("count:Q", title="Number of stocks"),
-    #         color=alt.condition(
-    #             alt.datum.range.isin(["0% to 1%", "1% to 3%", "3% to 5%", "5% to 10%", "> 10%"]),
-    #             alt.value("green"),
-    #             alt.value("red"),
-    #         ),
-    #         tooltip=["range", "count"],
-    #     )
-    #     .properties(
-    #         title="Pre-open Stock Count by % Change Bucket",
-    #         height=320,
-    #         width="container",
-    #     )
-    # )
+    count_text = (
+        alt.Chart(bucket_counts)
+        .mark_text(dx=5, align="left", color="white", fontWeight="bold", fontSize=13)
+        .encode(
+            y=alt.Y("range:N", sort=labels),
+            x=alt.X("count:Q"),
+            text=alt.Text("count:Q", format="d"),
+        )
+    )
+
+    range_chart = range_chart + count_text
+
+    # Create turnover chart for ranges
+    turnover_range_chart = (
+        alt.Chart(bucket_counts)
+        .mark_bar(cornerRadius=8)
+        .encode(
+            y=alt.Y(
+                "range:N",
+                sort=labels,
+                title="% Change bucket",
+                axis=alt.Axis(labelFontSize=13, titleFontSize=15),
+            ),
+            x=alt.X(
+                "total_value:Q",
+                title="Total Turnover (Cr)",
+                axis=alt.Axis(labelFontSize=13, titleFontSize=15),
+            ),
+            color=alt.condition(
+                alt.FieldOneOfPredicate(field="range", oneOf=["0% to 1%", "1% to 3%", "3% to 5%", "5% to 10%", "10% to 20%"]),
+                alt.value("#1f77b4"),
+                alt.value("#ff7f0e"),
+            ),
+            tooltip=["range", "total_value_label"],
+        )
+        .properties(
+            title="Pre-open Turnover by % Change Bucket",
+            height=360,
+            width="container",
+        )
+    )
+
+    turnover_text = (
+        alt.Chart(bucket_counts)
+        .mark_text(dx=5, align="left", color="white", fontWeight="bold", fontSize=13)
+        .encode(
+            y=alt.Y("range:N", sort=labels),
+            x=alt.X("total_value:Q"),
+            text=alt.Text("total_value_label:N"),
+        )
+    )
+
+    turnover_range_chart = turnover_range_chart + turnover_text
 
 
     counts_df = pd.DataFrame(
@@ -460,12 +497,13 @@ try:
         width="container",
         title="Advance vs Decline",
     )
-    # Clean data
+    # Use only the first 10 rows for the bubble chart
+    df = df10.copy()
     df = df.dropna()
     df = df[df["VALUE"] > 0]
 
-    # Optional: Top movers only
-    df = df.sort_values("%CHNG", key=abs, ascending=False).head(20)
+    # Optional: Top movers only within the first 10 rows
+    df = df.sort_values("%CHNG", key=abs, ascending=False).head(10)
 
     # Color
     df["Color"] = df["%CHNG"].apply(lambda x: "Gain" if x > 0 else "Loss")
@@ -574,6 +612,15 @@ try:
     with col4:
         df.sort_values("VALUE", ascending=False, inplace=True)
         st.dataframe(df.reset_index(drop=True).drop(columns=["Color"]))
+
+    # Range chart below the pre-open layout
+    range_col1, r_col2 = st.columns([10, 10])
+    with range_col1:
+        with st.container(border=True):
+            st.altair_chart(range_chart, use_container_width=True)
+    with r_col2:
+        with st.container(border=True):
+            st.altair_chart(turnover_range_chart, use_container_width=True)
 except Exception as e:
     st.error(f"Error loading pre-open data: {e}")
 
