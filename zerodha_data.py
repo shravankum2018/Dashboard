@@ -209,9 +209,9 @@ def _fetch_chunk(tickers, chunk_query, interval, headers):
             print(f"Fetching data for {ticker} with ID {ID}...")
             fetch_url = 'https://kite.zerodha.com/oms/instruments/historical/{0}/{1}'.format(ID, interval)
 
-            # Print curl command for debugging
-            curl_cmd = f"curl -H 'authorization: {headers['authorization']}' '{fetch_url}?{urlencode(chunk_query)}'"
-            print(f"Curl command for {ticker}: {curl_cmd}")
+            # # Print curl command for debugging
+            # curl_cmd = f"curl -H 'authorization: {headers['authorization']}' '{fetch_url}?{urlencode(chunk_query)}'"
+            # print(f"Curl command for {ticker}: {curl_cmd}")
 
             response = s.get(url=fetch_url, headers=headers, params=chunk_query)
             data = response.json()
@@ -264,9 +264,10 @@ def get_pre_open_data_cached(index):
         columns = ['SYMBOL', 'PREV_CLOSE', 'IEP', 'CHNG', '%CHNG', 'FINAL', 'FINAL_QUANTITY', 'VALUE', 'FFM_CAP', '52W_H', '52W_L']
         df.columns = columns
         df = df.sort_values(by='VALUE', ascending=False).reset_index(drop=True)
-        df = df[['SYMBOL', '%CHNG', 'VALUE']]
+        df = df[['SYMBOL', '%CHNG', 'VALUE', 'IEP']]
         df["%CHNG"] = pd.to_numeric(df["%CHNG"], errors="coerce")
         df["VALUE"] = pd.to_numeric(df["VALUE"], errors="coerce")
+        df["IEP"] = pd.to_numeric(df["IEP"], errors="coerce")
 
         # Fix: compute turnover BEFORE overwriting df_advance/df_decline with counts
         df_advance_rows = df[df['%CHNG'] > 0]
