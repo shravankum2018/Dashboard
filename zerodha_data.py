@@ -229,7 +229,10 @@ def get_pre_open_data_cached(index):
     }
     url = f"{base_url}?{urlencode(params)}"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://www.nseindia.com/',
+        'Accept-Language': 'en-US,en;q=0.9',
     }
     session = requests.Session()
     session.get("https://www.nseindia.com", headers=headers)
@@ -285,7 +288,10 @@ def get_live_nse_data(index):
     }
     url = f"{base_url}?{urlencode(params)}"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://www.nseindia.com/',
+        'Accept-Language': 'en-US,en;q=0.9',
     }
     # NSE requires establishing a session first
     session = requests.Session()
