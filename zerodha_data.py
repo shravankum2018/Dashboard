@@ -5,10 +5,28 @@ from io import StringIO
 from datetime import datetime, timedelta, date
 from dotenv import load_dotenv
 import os
-import streamlit as st
 from urllib.parse import urlencode
 
+try:
+    import streamlit as st
+except Exception:
+    st = None
+
 load_dotenv(override=True)
+
+def cache_data_compat(*args, **kwargs):
+    """Use Streamlit caching when available, otherwise return the function unchanged."""
+    def decorator(func):
+        if st is None:
+            return func
+
+        cache_api = getattr(st, "cache_data", None) or getattr(st, "cache", None)
+        if cache_api is None:
+            return func
+
+        return cache_api(*args, **kwargs)(func)
+
+    return decorator
 
 nifty_dict = {
     "M&M": 519937,
@@ -197,7 +215,7 @@ def load_data(tickers: list, from_date: str, interval: str = 'day') -> pd.DataFr
     main_df.index.name = 'Date'
     return main_df
 
-@st.cache_data(show_spinner=False, ttl=300)
+@cache_data_compat(show_spinner=False, ttl=300)
 def get_pre_open_data_cached(index):
     """
     Fetches pre-open market data for F&O from NSE India and returns as DataFrame.
