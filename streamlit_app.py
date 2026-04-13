@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from datetime import date, timedelta
-from zerodha_data import load_data, get_pre_open_data_cached
+from zerodha_data import get_pre_open_data_cached,load_data
 import requests
 from io import StringIO
 import numpy as np
