@@ -254,7 +254,13 @@ if "sl_amount_limit" not in st.session_state:
 if "quantity" not in st.session_state:
     st.session_state.quantity = 1
 if "last_qty_source" not in st.session_state:
-    st.session_state.last_qty_source = "auto"  # "auto" or "manual"
+    st.session_state.last_qty_source = "auto"
+if "show_volume" not in st.session_state:
+    st.session_state.show_volume = False
+if "volume_data" not in st.session_state:
+    st.session_state.volume_data = None
+if "volume_ticker" not in st.session_state:
+    st.session_state.volume_ticker = None
 
 # ─── Helper Functions ─────────────────────────────────────────────────────────
 
@@ -352,6 +358,76 @@ def fetch_ohlcv(ticker):
             "volume"    : volume,
             "prev_close": prev_close,
             "pct_change": pct_change,
+        }, None
+
+    except Exception as e:
+        return None, str(e)
+
+def fetch_volume_analysis(ticker):
+    from datetime import timedelta
+    instrument_id = TOKEN_MAP.get(ticker)
+    if not instrument_id:
+        return None, f"No instrument ID for {ticker}"
+
+    s         = _session()
+    today     = datetime.now().date()
+    from_date = (today - timedelta(days=35)).strftime("%Y-%m-%d")
+    to_date   = today.strftime("%Y-%m-%d")
+
+    try:
+        resp = s.get(
+            HIST_URL.format(instrument_id=instrument_id, interval="day"),
+            params={"user_id": st.session_state.user_id, "oi": "1",
+                    "from": from_date, "to": to_date}
+        )
+        if resp.status_code != 200:
+            return None, f"HTTP {resp.status_code}: {resp.text[:200]}"
+
+        candles = resp.json().get("data", {}).get("candles", [])
+        if not candles:
+            return None, "No candles returned"
+
+        # Each candle: [timestamp, open, high, low, close, volume]
+        all_days = [(c[0][:10], int(c[5])) for c in candles]
+
+        today_str = today.strftime("%Y-%m-%d")
+
+        # Today's volume from minute candles
+        resp2 = s.get(
+            HIST_URL.format(instrument_id=instrument_id, interval="minute"),
+            params={"user_id": st.session_state.user_id, "oi": "1",
+                    "from": today_str, "to": today_str}
+        )
+        today_vol = 0
+        if resp2.status_code == 200:
+            min_candles = resp2.json().get("data", {}).get("candles", [])
+            today_vol   = sum(int(c[5]) for c in min_candles)
+
+# Separate today from historical
+        hist_days = [(d, v) for d, v in all_days if d != today_str]
+
+        prev_day_vol = hist_days[-1][1] if hist_days else 0
+        week1_vols   = [v for _, v in hist_days[-5:]]
+        week2_vols   = [v for _, v in hist_days[-10:]]
+        month1_vols  = [v for _, v in hist_days[-22:]]
+
+        avg_1w = int(sum(week1_vols)  / len(week1_vols))  if week1_vols  else 0
+        avg_2w = int(sum(week2_vols)  / len(week2_vols))  if week2_vols  else 0
+        avg_1m = int(sum(month1_vols) / len(month1_vols)) if month1_vols else 0
+
+        # If today is holiday/market closed, use prev day as "today"
+        is_holiday = today_vol == 0
+        display_today     = prev_day_vol if is_holiday else today_vol
+        display_today_label = hist_days[-1][0] if is_holiday else "Today"
+
+        return {
+            "today"        : display_today,
+            "today_label"  : display_today_label,
+            "is_holiday"   : is_holiday,
+            "prev_day"     : hist_days[-2][1] if len(hist_days) >= 2 else prev_day_vol,
+            "avg_1w"       : avg_1w,
+            "avg_2w"       : avg_2w,
+            "avg_1m"       : avg_1m,
         }, None
 
     except Exception as e:
@@ -546,9 +622,18 @@ if st.session_state.get("last_ticker") != ticker:
     ltp, err, label = fetch_ltp(ticker)
     if ltp:
         st.session_state.ltp_cache[ticker] = ltp
+        st.session_state.ltp_label[ticker] = label
         _log(f"LTP: ₹{ltp:,.2f} for {ticker}", "success")
     else:
         _log(f"Auto-fetch failed for {ticker}: {err}", "error")
+    # Auto-refresh volume if it was already open
+    if st.session_state.show_volume:
+        vdata, verr = fetch_volume_analysis(ticker)
+        if vdata:
+            st.session_state.volume_data   = vdata
+            st.session_state.volume_ticker = ticker
+        else:
+            _log(f"Volume fetch failed for {ticker}: {verr}", "error")
 
 ltp_now = st.session_state.ltp_cache.get(ticker)
 
@@ -750,6 +835,73 @@ if ltp_now and ltp_now > 0:
 
 qty_mode = "SLAMT"
 
+# Volume Analysis
+if "show_volume" not in st.session_state:
+    st.session_state.show_volume = False
+if "volume_data" not in st.session_state:
+    st.session_state.volume_data = None
+if "volume_ticker" not in st.session_state:
+    st.session_state.volume_ticker = None
+
+col_vbtn, _ = st.columns([1, 4])
+with col_vbtn:
+    if st.button("📊 VOLUME ANALYSIS", use_container_width=True, key="vol_btn"):
+        with st.spinner("Fetching volume data..."):
+            vdata, verr = fetch_volume_analysis(ticker)
+            if vdata:
+                st.session_state.volume_data   = vdata
+                st.session_state.volume_ticker = ticker
+                st.session_state.show_volume   = True
+                _log(f"Volume fetched for {ticker}", "success")
+            else:
+                st.error(f"Volume fetch failed: {verr}")
+                st.session_state.show_volume = False
+
+if st.session_state.show_volume and st.session_state.volume_data and st.session_state.volume_ticker == ticker:
+    vd = st.session_state.volume_data
+
+    def fmt_vol(v):
+        if v >= 1_000_000: return f"{v/1_000_000:.2f}M"
+        if v >= 1_000:     return f"{v/1_000:.1f}K"
+        return str(v)
+
+    today_label = vd["today_label"] if vd.get("is_holiday") else "Today"
+    labels = [today_label, "Prev Day", "1W Avg", "2W Avg", "1M Avg"]
+    values = [vd["today"], vd["prev_day"], vd["avg_1w"], vd["avg_2w"], vd["avg_1m"]]
+    colors = ["#00e5a0", "#00b8ff", "#7c6af7", "#f7a26a", "#f76a8a"]
+
+    max_val = max(values) if max(values) > 0 else 1
+
+    bars_html = ""
+    for i, (label, val, color) in enumerate(zip(labels, values, colors)):
+        pct      = (val / max_val) * 100
+        is_today = label == today_label
+        border   = f"box-shadow:0 0 8px {color};" if is_today else ""
+        vs1m     = f"{((val/vd['avg_1m']-1)*100):+.0f}% vs 1M" if vd['avg_1m'] > 0 and is_today and val > 0 else ""
+        bars_html += (
+            f'<div style="display:flex;align-items:center;margin-bottom:0.6rem;gap:0.75rem;">'
+            f'<div style="width:90px;font-size:0.7rem;color:#8890a0;text-align:right;flex-shrink:0;white-space:nowrap;">{label}</div>'
+            f'<div style="flex:1;background:#1e2128;border-radius:6px;height:32px;position:relative;">'
+            f'<div style="width:{pct}%;height:100%;border-radius:6px;background:{color};{border}display:flex;align-items:center;justify-content:flex-end;padding-right:8px;box-sizing:border-box;min-width:60px;">'
+            f'<span style="font-size:0.78rem;font-weight:700;color:#000;">{fmt_vol(val)}</span>'
+            f'</div></div>'
+            f'<div style="width:60px;font-size:0.7rem;color:#4a5060;flex-shrink:0;">{vs1m}</div>'
+            f'</div>'
+        )
+
+    holiday_notice = ""
+    if vd.get("is_holiday"):
+        holiday_notice = f'<div style="font-size:0.75rem; color:#f7a26a; margin-bottom:0.75rem;">⚠️ Market closed today — showing last trading day ({vd["today_label"]})</div>'
+
+    full_html = (
+        '<div style="background:#111318; border:1px solid #1e2128; border-radius:10px; padding:1.25rem; margin-bottom:1rem;">'
+        '<div style="font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; color:#4a5060; margin-bottom:0.5rem;">📊 VOLUME ANALYSIS — ' + ticker + '</div>'
+        + holiday_notice +
+        '<div style="margin-top:0.75rem;">'
+        + bars_html +
+        '</div></div>'
+    )
+    st.markdown(full_html, unsafe_allow_html=True)
 # Row 4: Order Type Buttons
 st.markdown("<div class='section-title'>ORDER TYPE</div>", unsafe_allow_html=True)
 
