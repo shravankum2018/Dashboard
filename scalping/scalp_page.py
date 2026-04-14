@@ -279,6 +279,15 @@ _SCALP_CSS = """
 }
 
 .stat-pill b { color: #e8eaf0; }
+
+/* Toggle button group styling */
+div[data-testid="stHorizontalBlock"] .toggle-group-btn button {
+    border-radius: 6px !important;
+    font-family: 'Space Mono', monospace !important;
+    font-size: 0.8rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.05em !important;
+}
 </style>
 """
 
@@ -299,13 +308,15 @@ def render_scalp_page(symbols: list[str], token_map: dict):
         ("scalp_ltp",          None),
         ("scalp_entry",        None),
         ("scalp_order_id",     None),
-        ("scalp_active",       False),   # True after entry fired
+        ("scalp_active",       False),
         ("scalp_sl_placed",    False),
         ("scalp_tgt_placed",   False),
         ("scalp_trade_log",    []),
         ("scalp_wins",         0),
         ("scalp_losses",       0),
         ("scalp_pnl",          0.0),
+        ("scalp_txn",          "BUY"),       # BUY | SELL toggle
+        ("scalp_leg_mode",     "AUTO_SL"),   # AUTO_SL | AUTO_TGT toggle
     ]:
         if key not in st.session_state:
             st.session_state[key] = default
@@ -353,8 +364,32 @@ def render_scalp_page(symbols: list[str], token_map: dict):
         )
     with c2:
         scalp_exchange = st.selectbox("Exchange", ["NSE", "BSE"], key="scalp_exchange")
+
+    # ── BUY / SELL toggle (mutually exclusive) ────────────────────────────────
     with c3:
-        scalp_txn = st.radio("Side", ["BUY", "SELL"], horizontal=True, key="scalp_txn")
+        st.markdown("**Side**")
+        buy_col, sell_col = st.columns(2)
+        with buy_col:
+            if st.button(
+                "🟢 BUY" if st.session_state.scalp_txn == "BUY" else "BUY",
+                key="scalp_txn_buy",
+                use_container_width=True,
+                type="primary" if st.session_state.scalp_txn == "BUY" else "secondary",
+            ):
+                st.session_state.scalp_txn = "BUY"
+                st.rerun()
+        with sell_col:
+            if st.button(
+                "🔴 SELL" if st.session_state.scalp_txn == "SELL" else "SELL",
+                key="scalp_txn_sell",
+                use_container_width=True,
+                type="primary" if st.session_state.scalp_txn == "SELL" else "secondary",
+            ):
+                st.session_state.scalp_txn = "SELL"
+                st.rerun()
+
+    scalp_txn = st.session_state.scalp_txn
+
     with c4:
         scalp_qty = st.number_input("Qty", min_value=1, value=1, step=1, key="scalp_qty")
 
@@ -366,10 +401,34 @@ def render_scalp_page(symbols: list[str], token_map: dict):
         rr = st.number_input("R:R (target multiplier)", min_value=0.5, max_value=10.0,
                               value=1.5, step=0.1, format="%.1f", key="scalp_rr",
                               help="1.5 means target = 1.5× your SL distance")
+
+    # ── Auto-leg toggle (mutually exclusive: SL leg OR Target leg) ────────────
     with c7:
-        auto_sl  = st.toggle("Auto-place SL leg",  value=True,  key="scalp_auto_sl")
-        auto_tgt = st.toggle("Auto-place Tgt leg", value=False, key="scalp_auto_tgt",
-                              help="Places a limit order for target simultaneously")
+        st.markdown("**Auto-place leg**")
+        sl_col, tgt_col = st.columns(2)
+        with sl_col:
+            if st.button(
+                "✅ SL" if st.session_state.scalp_leg_mode == "AUTO_SL" else "SL",
+                key="scalp_leg_sl",
+                use_container_width=True,
+                type="primary" if st.session_state.scalp_leg_mode == "AUTO_SL" else "secondary",
+                help="Auto-place SL-M order after entry",
+            ):
+                st.session_state.scalp_leg_mode = "AUTO_SL"
+                st.rerun()
+        with tgt_col:
+            if st.button(
+                "✅ TGT" if st.session_state.scalp_leg_mode == "AUTO_TGT" else "TGT",
+                key="scalp_leg_tgt",
+                use_container_width=True,
+                type="primary" if st.session_state.scalp_leg_mode == "AUTO_TGT" else "secondary",
+                help="Auto-place limit target order after entry",
+            ):
+                st.session_state.scalp_leg_mode = "AUTO_TGT"
+                st.rerun()
+
+    auto_sl  = st.session_state.scalp_leg_mode == "AUTO_SL"
+    auto_tgt = st.session_state.scalp_leg_mode == "AUTO_TGT"
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -401,7 +460,7 @@ def render_scalp_page(symbols: list[str], token_map: dict):
 
         max_loss  = round(sl_pts  * scalp_qty, 2)
         max_gain  = round(tgt_pts * scalp_qty, 2)
-        rr_bar_w  = min(int((rr / 4) * 100), 100)    # visual bar up to 4R
+        rr_bar_w  = min(int((rr / 4) * 100), 100)
 
         st.markdown(f"""
         <div class="scalp-card">
@@ -552,7 +611,7 @@ def render_scalp_page(symbols: list[str], token_map: dict):
                 result = _place_market_order(scalp_ticker, scalp_txn, scalp_qty, scalp_exchange)
             if result.get("status") == "success":
                 oid   = result["data"].get("order_id", "")
-                entry = ltp_now  # approximate; real fill comes from order book
+                entry = ltp_now
 
                 st.session_state.scalp_entry     = entry
                 st.session_state.scalp_order_id  = oid
@@ -564,7 +623,7 @@ def render_scalp_page(symbols: list[str], token_map: dict):
                 _log(f"✅ ENTRY {scalp_txn} {scalp_qty}×{scalp_ticker} @ ~₹{entry} | ID:{oid}", "success")
                 st.success(f"✅ Entry placed! ID: {oid}")
 
-                # Auto-place legs if toggled
+                # Auto-place leg based on toggle selection
                 if auto_sl:
                     exit_txn = "SELL" if scalp_txn == "BUY" else "BUY"
                     sl_r = _place_sl_order(scalp_ticker, exit_txn, scalp_qty,
