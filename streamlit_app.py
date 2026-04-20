@@ -543,9 +543,9 @@ with st.expander("", expanded=True):
 
             # ── Apply price filter ──────────────────────────────────────
             if price_filter == "Exclude < ₹50":
-                df = df[df["IEP"] >= 50]
+                df = df[df["LTP"] >= 50]
             elif price_filter == "Exclude < ₹100":
-                df = df[df["IEP"] >= 100]
+                df = df[df["LTP"] >= 100]
 
             if price_filter and price_filter != "No Filter":
                 df_advance_rows = df[df['%CHNG'] > 0]
@@ -580,7 +580,7 @@ with st.expander("", expanded=True):
                         color="%CHNG",
                         color_continuous_scale="RdYlGn",
                         color_continuous_midpoint=0,
-                        hover_data={"%CHNG": ":.2f", "VALUE": ":,.0f", "IEP": ":,.2f"},
+                        hover_data={"%CHNG": ":.2f", "VALUE": ":,.0f", "LTP": ":,.2f"},
                         title=f"Pre-open Treemap — {selected_preopen_index}"
                     )
                     fig_treemap.update_layout(
